@@ -25,7 +25,7 @@ Hooks.once("setupTileActions", (tiles) => {
         help: "The volley starts at the midpoint of this wall segment."
       },
       { id: "originX", name: "Launch X", type: "number", defvalue: "",
-        help: "Used when no wall is selected. Leave both coordinates blank to fire from just left of the tile." },
+        help: "Used when no wall is selected. Leave both coordinates blank to fire from the midpoint of the tile’s left edge." },
       { id: "originY", name: "Launch Y", type: "number", defvalue: "" },
       { id: "requestSave", name: "Request Dexterity save", type: "checkbox", defvalue: true,
         conditional: () => game.system.id === "dnd5e" },
@@ -80,7 +80,7 @@ async function triggerDartWall({ tile, tokens = [], action, method }) {
   const y = parseCoordinate(settings.originY);
   const fallback = Number.isFinite(x) && Number.isFinite(y)
     ? { x, y }
-    : { x: Math.min(tile.x, tile.x + tile.width) - gridSize * 0.65, y: tile.y + tile.height / 2 };
+    : { x: Math.min(tile.x, tile.x + tile.width), y: tile.y + tile.height / 2 };
 
   let launch = fallback;
   let wallSpread;
