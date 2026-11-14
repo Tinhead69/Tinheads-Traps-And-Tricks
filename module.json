@@ -4,7 +4,7 @@
   "description": "Adds a dart-wall volley and Dexterity save prompt to Monk's Active Tile Triggers.",
   "version": "0.1.0",
   "manifest": "https://raw.githubusercontent.com/Tinhead69/Tinheads-Traps-And-Tricks/main/module.json",
-  "download": "https://raw.githubusercontent.com/Tinhead69/Tinheads-Traps-And-Tricks/main/trap-animator.zip",
+  "download": "https://github.com/Tinhead69/Tinheads-Traps-And-Tricks/archive/refs/heads/main.zip",
   "compatibility": {
     "minimum": "14",
     "maximum": "14"
