@@ -78,9 +78,16 @@ async function triggerDartWall({ tile, tokens = [], action, method }) {
   }
   const x = parseCoordinate(settings.originX);
   const y = parseCoordinate(settings.originY);
+  // Foundry's tile position is its anchor. The shape supplies the actual scene center.
+  const tileCenter = tile.shape.center;
+  const halfWidth = Math.abs(tile.width) / 2;
+  const rotation = tile.rotation * Math.PI / 180;
   const fallback = Number.isFinite(x) && Number.isFinite(y)
     ? { x, y }
-    : { x: Math.min(tile.x, tile.x + tile.width), y: tile.y + tile.height / 2 };
+    : {
+      x: tileCenter.x - halfWidth * Math.cos(rotation),
+      y: tileCenter.y - halfWidth * Math.sin(rotation)
+    };
 
   let launch = fallback;
   let wallSpread;
@@ -98,7 +105,7 @@ async function triggerDartWall({ tile, tokens = [], action, method }) {
     if (token.documentName !== "Token" || token.parent !== scene) continue;
     const center = token.getCenterPoint();
     const target = method === "enter"
-      ? { x: tile.x + tile.width / 2, y: tile.y + tile.height / 2, elevation: center.elevation }
+      ? { x: tileCenter.x, y: tileCenter.y, elevation: center.elevation }
       : center;
     const effect = { sceneId: scene.id, tokenId: token.id, origin: launch, target, wallSpread };
     game.socket.emit(CHANNEL, effect);
