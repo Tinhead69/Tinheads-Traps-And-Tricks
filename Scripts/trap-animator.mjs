@@ -1,7 +1,7 @@
 const ID = "trap-animator";
 const CHANNEL = `module.${ID}`;
 const DART_TEXTURE = `modules/${ID}/art/dart.svg`;
-const SAVE_DC = 15;
+const DEFAULT_SAVE_DC = 15;
 
 Hooks.once("init", () => {
   CONFIG.Canvas.vfx.enabled = true;
@@ -26,7 +26,9 @@ Hooks.once("setupTileActions", (tiles) => {
       { id: "originX", name: "Launch X", type: "number", defvalue: "",
         help: "Used when no wall is selected. Leave both coordinates blank to fire from just left of the tile." },
       { id: "originY", name: "Launch Y", type: "number", defvalue: "" },
-      { id: "requestSave", name: "Request DC 15 Dexterity save", type: "checkbox", defvalue: true,
+      { id: "requestSave", name: "Request Dexterity save", type: "checkbox", defvalue: true,
+        conditional: () => game.system.id === "dnd5e" },
+      { id: "saveDC", name: "Save DC", type: "number", min: 1, step: 1, defvalue: DEFAULT_SAVE_DC,
         conditional: () => game.system.id === "dnd5e" }
     ],
     fn: triggerDartWall,
@@ -40,6 +42,7 @@ Hooks.once("ready", () => {
 
 Hooks.on("renderChatMessageHTML", (message, html) => {
   const tokenUuid = message.getFlag(ID, "saveToken");
+  const dc = getSaveDC(message.getFlag(ID, "saveDC"));
   const button = html.querySelector("[data-trap-animator-save]");
   if (!tokenUuid || !button || game.system.id !== "dnd5e") return;
 
@@ -52,7 +55,7 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
         ui.notifications.warn("You need ownership of the triggering character to roll this save.");
         return;
       }
-      await actor.rollSavingThrow({ ability: "dex", target: SAVE_DC });
+      await actor.rollSavingThrow({ ability: "dex", target: dc });
     } catch (error) {
       console.error("Trap Animator | Saving throw failed", error);
       ui.notifications.error("The dart wall saving throw could not be rolled.");
@@ -101,7 +104,7 @@ async function triggerDartWall({ tile, tokens = [], action, method }) {
     playOnViewedScene(effect);
 
     if (game.system.id === "dnd5e" && (settings.requestSave ?? true)) {
-      await requestDexteritySave(token);
+      await requestDexteritySave(token, getSaveDC(settings.saveDC));
     }
   }
 }
@@ -111,7 +114,12 @@ function parseCoordinate(value) {
   return Number(value);
 }
 
-async function requestDexteritySave(token) {
+function getSaveDC(value) {
+  const dc = typeof value === "string" ? Number(value) : value;
+  return Number.isSafeInteger(dc) && dc > 0 ? dc : DEFAULT_SAVE_DC;
+}
+
+async function requestDexteritySave(token, dc) {
   const actor = token.actor;
   if (typeof actor?.rollSavingThrow !== "function" || !actor.system.abilities?.dex) return;
   const whisper = game.users
@@ -122,10 +130,10 @@ async function requestDexteritySave(token) {
   const ChatMessage = CONFIG.ChatMessage.documentClass;
   await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ scene: token.parent, token, actor, alias: token.name }),
-    content: `<p><strong>Dart Wall</strong> &middot; Make a DC ${SAVE_DC} Dexterity saving throw.</p>
+    content: `<p><strong>Dart Wall</strong> &middot; Make a DC ${dc} Dexterity saving throw.</p>
       <button type="button" data-trap-animator-save>Roll Dexterity Save</button>`,
     whisper,
-    flags: { [ID]: { saveToken: token.uuid } }
+    flags: { [ID]: { saveToken: token.uuid, saveDC: dc } }
   });
 }
 
