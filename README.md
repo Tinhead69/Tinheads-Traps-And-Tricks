@@ -16,4 +16,4 @@ Trap Animator adds a **Dart Wall** action to Monk’s Active Tile Triggers. When
 4. In **Launch Wall**, activate the picker and select the wall segment in the scene’s Walls layer. The volley starts at the midpoint and follows the wall if you move it. If you leave the wall unset, enter **Launch X** and **Launch Y** in scene pixels or leave them blank to fire from the midpoint of the tile’s left edge toward its center.
 5. Save the tile. Move a player-owned token across the tile edge. The three darts should appear for clients viewing the scene, and the token’s player and the GM should receive the chat prompt. Click **Roll Dexterity Save** to verify it opens the entering character’s save dialog.
 
-The animation uses Foundry v14’s experimental native VFX API. The save request uses the D&D 5e system’s native roll dialog, with no additional roll-request module required.
+The darts render above wall and fog effects for GMs and for players who own or can see the triggering token. The save request uses the D&D 5e system’s native roll dialog, with no additional roll-request module required.

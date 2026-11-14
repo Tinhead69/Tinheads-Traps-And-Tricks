@@ -4,10 +4,6 @@ const DART_TEXTURE = `modules/${ID}/art/dart.svg`;
 const DEFAULT_SAVE_DC = 15;
 const DART_WIDTH_PIXELS = 96;
 
-Hooks.once("init", () => {
-  CONFIG.Canvas.vfx.enabled = true;
-});
-
 Hooks.once("setupTileActions", (tiles) => {
   tiles.registerTileGroup(ID, "Trap Animator");
   tiles.registerTileAction(ID, "dartWall", {
@@ -149,54 +145,56 @@ function playOnViewedScene(effect) {
   if (!canvas.ready || !effect || canvas.scene.id !== effect.sceneId) return;
   const { origin, target, tokenId, wallSpread } = effect;
   const token = canvas.scene.tokens.get(tokenId);
-  if (!token || (token.hidden && !game.user.isGM)) return;
+  if (!token) return;
+  if (!game.user.isGM && (token.hidden || (!token.isOwner && !token.object?.isVisible))) return;
   if (![origin?.x, origin?.y, target?.x, target?.y, target?.elevation].every(Number.isFinite)) return;
 
   const spread = [wallSpread?.x, wallSpread?.y].every(Number.isFinite) ? wallSpread : undefined;
-  playVolley({ ...origin, elevation: target.elevation }, target, canvas.dimensions, spread).catch((error) => {
+  playVolley(origin, target, canvas.dimensions.size, spread).catch((error) => {
     console.error("Trap Animator | Dart volley failed", error);
   });
 }
 
-async function playVolley(origin, target, { size: gridSize, distance: gridDistance }, wallSpread) {
+async function playVolley(origin, target, gridSize, wallSpread) {
   const dx = target.x - origin.x;
   const dy = target.y - origin.y;
   const distance = Math.hypot(dx, dy);
   if (!Number.isFinite(distance) || distance < 1) return;
 
+  const scene = canvas.scene;
+  const layer = canvas.interface;
+  const texture = await foundry.canvas.loadTexture(DART_TEXTURE);
+  if (!texture?.width) throw new Error("Dart texture could not be loaded.");
+
   const spreadX = -dy / distance * gridSize * 0.14;
   const spreadY = dx / distance * gridSize * 0.14;
   const duration = Math.min(650, Math.max(180, 110 * distance / gridSize));
-  const components = {};
-  const timeline = [];
+  const { CanvasAnimation } = foundry.canvas.animation;
 
-  for (const [index, lane] of [-1, 0, 1].entries()) {
-    const component = `dart${index}`;
-    const start = {
-      ...origin,
-      x: origin.x + lane * (wallSpread?.x ?? spreadX),
-      y: origin.y + lane * (wallSpread?.y ?? spreadY)
-    };
-    const end = {
-      ...target,
-      x: target.x + lane * spreadX * 0.35,
-      y: target.y + lane * spreadY * 0.35
-    };
-    const rotation = Math.atan2(end.y - start.y, end.x - start.x);
-    components[component] = {
-      type: "singleAttack",
-      pathType: "linear",
-      path: [{ ...start, rotation }, { ...end, rotation }],
-      projectile: {
-        texture: DART_TEXTURE,
-        duration,
-        size: DART_WIDTH_PIXELS * gridDistance / gridSize,
-        animations: [{ function: "followPath", params: {} }]
-      }
-    };
-    timeline.push({ component, position: index * 70 });
-  }
+  await Promise.all([-1, 0, 1].map(async (lane, index) => {
+    if (index) await new Promise(resolve => setTimeout(resolve, index * 70));
+    if (!canvas.ready || canvas.scene !== scene || canvas.interface !== layer || layer.destroyed) return;
 
-  const effect = new foundry.canvas.vfx.VFXEffect({ name: "Dart Wall", components, timeline });
-  await effect.play();
+    const startX = origin.x + lane * (wallSpread?.x ?? spreadX);
+    const startY = origin.y + lane * (wallSpread?.y ?? spreadY);
+    const endX = target.x + lane * spreadX * 0.35;
+    const endY = target.y + lane * spreadY * 0.35;
+    const dart = new PIXI.Sprite(texture);
+    dart.eventMode = "none";
+    dart.anchor.set(0.5);
+    dart.scale.set(DART_WIDTH_PIXELS / texture.width);
+    dart.position.set(startX, startY);
+    dart.rotation = Math.atan2(endY - startY, endX - startX);
+
+    // The interface group renders above Foundry's wall, lighting, and fog effects.
+    try {
+      layer.addChild(dart);
+      await CanvasAnimation.animate([
+        { parent: dart, attribute: "x", to: endX },
+        { parent: dart, attribute: "y", to: endY }
+      ], { duration, easing: t => t });
+    } finally {
+      if (!dart.destroyed) dart.destroy();
+    }
+  }));
 }
