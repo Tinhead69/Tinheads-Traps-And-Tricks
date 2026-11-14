@@ -13,7 +13,7 @@ Trap Animator adds a **Dart Wall** action to Monk’s Active Tile Triggers. When
 1. Place a tile over the area that should trigger the trap. If you want a concealed trigger, use a transparent tile image.
 2. Open the tile settings, enable Monk’s triggers for the tile, and choose **Enter**.
 3. In the tile’s **Actions**, add **Trap Animator → Dart Wall**. Keep **Request DC 15 Dexterity save** checked. If you already use Monk’s TokenBar to request the save, uncheck this option and put your existing roll request after the Dart Wall action.
-4. Leave **Launch X** and **Launch Y** blank to fire from just left of the tile. Set both fields to fire from a particular spot on the wall. Coordinates are scene pixels, with X increasing right and Y increasing down. To read a point, hover over the map and use `console.log(canvas.mousePosition.x, canvas.mousePosition.y)` in the browser console.
+4. In **Launch Wall**, activate the picker and select the wall segment in the scene’s Walls layer. The volley starts at the midpoint and follows the wall if you move it. If you leave the wall unset, enter **Launch X** and **Launch Y** in scene pixels or leave them blank to fire from just left of the tile.
 5. Save the tile. Move a player-owned token across the tile edge. The three darts should appear for clients viewing the scene, and the token’s player and the GM should receive the chat prompt. Click **Roll Dexterity Save** to verify it opens the entering character’s save dialog.
 
 The animation uses Foundry v14’s experimental native VFX API. The save request uses the D&D 5e system’s native roll dialog, with no additional roll-request module required.

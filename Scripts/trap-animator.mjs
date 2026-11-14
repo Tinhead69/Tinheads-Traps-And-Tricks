@@ -12,8 +12,19 @@ Hooks.once("setupTileActions", (tiles) => {
   tiles.registerTileAction(ID, "dartWall", {
     name: "Dart Wall",
     ctrls: [
+      {
+        id: "wall",
+        name: "Launch Wall",
+        type: "select",
+        subtype: "entity",
+        options: { show: [] },
+        defaultType: "walls",
+        restrict: (entity) => entity instanceof foundry.canvas.placeables.Wall,
+        placeholder: "Select a wall on the scene",
+        help: "The volley starts at the midpoint of this wall segment."
+      },
       { id: "originX", name: "Launch X", type: "number", defvalue: "",
-        help: "Scene pixels. Leave both coordinates blank to fire from just left of the tile." },
+        help: "Used when no wall is selected. Leave both coordinates blank to fire from just left of the tile." },
       { id: "originY", name: "Launch Y", type: "number", defvalue: "" },
       { id: "requestSave", name: "Request DC 15 Dexterity save", type: "checkbox", defvalue: true,
         conditional: () => game.system.id === "dnd5e" }
@@ -55,11 +66,29 @@ async function triggerDartWall({ tile, tokens = [], action, pt, method }) {
   const scene = tile.parent;
   const gridSize = scene.dimensions.size;
   const settings = action.data ?? {};
+  const wallUuid = settings.wall?.id;
+  const wall = wallUuid ? scene.walls.get(wallUuid.split(".").at(-1)) : null;
+  if (wallUuid && wall?.uuid !== wallUuid) {
+    ui.notifications.warn("Trap Animator could not find the launch wall. Reopen the Dart Wall action and select a wall on this scene.");
+    return;
+  }
   const x = parseCoordinate(settings.originX);
   const y = parseCoordinate(settings.originY);
-  const launch = Number.isFinite(x) && Number.isFinite(y)
+  const fallback = Number.isFinite(x) && Number.isFinite(y)
     ? { x, y }
     : { x: Math.min(tile.x, tile.x + tile.width) - gridSize * 0.2, y: tile.y + tile.height / 2 };
+
+  let launch = fallback;
+  let wallSpread;
+  if (wall) {
+    const [x0, y0, x1, y1] = wall.c;
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const length = Math.hypot(dx, dy);
+    const spread = length ? Math.min(gridSize * 0.14 / length, 0.5) : 0;
+    launch = { x: x0 + dx / 2, y: y0 + dy / 2 };
+    wallSpread = { x: dx * spread, y: dy * spread };
+  }
 
   for (const token of new Set(tokens)) {
     if (token.documentName !== "Token" || token.parent !== scene) continue;
@@ -67,7 +96,7 @@ async function triggerDartWall({ tile, tokens = [], action, pt, method }) {
     const target = method === "enter" && Number.isFinite(pt?.x) && Number.isFinite(pt?.y)
       ? { x: pt.x, y: pt.y, elevation: center.elevation }
       : center;
-    const effect = { sceneId: scene.id, tokenId: token.id, origin: launch, target };
+    const effect = { sceneId: scene.id, tokenId: token.id, origin: launch, target, wallSpread };
     game.socket.emit(CHANNEL, effect);
     playOnViewedScene(effect);
 
@@ -102,17 +131,18 @@ async function requestDexteritySave(token) {
 
 function playOnViewedScene(effect) {
   if (!canvas.ready || !effect || canvas.scene.id !== effect.sceneId) return;
-  const { origin, target, tokenId } = effect;
+  const { origin, target, tokenId, wallSpread } = effect;
   const token = canvas.scene.tokens.get(tokenId);
   if (!token || (token.hidden && !game.user.isGM)) return;
   if (![origin?.x, origin?.y, target?.x, target?.y, target?.elevation].every(Number.isFinite)) return;
 
-  playVolley({ ...origin, elevation: target.elevation }, target, canvas.dimensions.size).catch((error) => {
+  const spread = [wallSpread?.x, wallSpread?.y].every(Number.isFinite) ? wallSpread : undefined;
+  playVolley({ ...origin, elevation: target.elevation }, target, canvas.dimensions.size, spread).catch((error) => {
     console.error("Trap Animator | Dart volley failed", error);
   });
 }
 
-async function playVolley(origin, target, gridSize) {
+async function playVolley(origin, target, gridSize, wallSpread) {
   const dx = target.x - origin.x;
   const dy = target.y - origin.y;
   const distance = Math.hypot(dx, dy);
@@ -131,8 +161,8 @@ async function playVolley(origin, target, gridSize) {
       pathType: "linear",
       path: [{
         ...origin,
-        x: origin.x + lane * spreadX,
-        y: origin.y + lane * spreadY
+        x: origin.x + lane * (wallSpread?.x ?? spreadX),
+        y: origin.y + lane * (wallSpread?.y ?? spreadY)
       }, {
         ...target,
         x: target.x + lane * spreadX * 0.35,
