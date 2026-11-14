@@ -2,7 +2,7 @@ const ID = "trap-animator";
 const CHANNEL = `module.${ID}`;
 const DART_TEXTURE = `modules/${ID}/art/dart.svg`;
 const DEFAULT_SAVE_DC = 15;
-const DART_WIDTH_PIXELS = 48;
+const DART_WIDTH_PIXELS = 96;
 
 Hooks.once("init", () => {
   CONFIG.Canvas.vfx.enabled = true;
