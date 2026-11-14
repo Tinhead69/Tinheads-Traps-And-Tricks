@@ -98,7 +98,7 @@ async function triggerDartWall({ tile, tokens = [], action, method }) {
   }
 
   for (const token of new Set(tokens)) {
-    if (token.documentName !== "Token" || token.parent !== scene) continue;
+    if (!(token instanceof CONFIG.Token.documentClass) || token.parent !== scene) continue;
     const center = token.getCenterPoint();
     const target = method === "enter"
       ? { x: tileCenter.x, y: tileCenter.y, elevation: center.elevation }
