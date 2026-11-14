@@ -76,7 +76,7 @@ async function triggerDartWall({ tile, tokens = [], action, pt, method }) {
   const y = parseCoordinate(settings.originY);
   const fallback = Number.isFinite(x) && Number.isFinite(y)
     ? { x, y }
-    : { x: Math.min(tile.x, tile.x + tile.width) - gridSize * 0.2, y: tile.y + tile.height / 2 };
+    : { x: Math.min(tile.x, tile.x + tile.width) - gridSize * 0.65, y: tile.y + tile.height / 2 };
 
   let launch = fallback;
   let wallSpread;
@@ -137,12 +137,12 @@ function playOnViewedScene(effect) {
   if (![origin?.x, origin?.y, target?.x, target?.y, target?.elevation].every(Number.isFinite)) return;
 
   const spread = [wallSpread?.x, wallSpread?.y].every(Number.isFinite) ? wallSpread : undefined;
-  playVolley({ ...origin, elevation: target.elevation }, target, canvas.dimensions.size, spread).catch((error) => {
+  playVolley({ ...origin, elevation: target.elevation }, target, canvas.dimensions, spread).catch((error) => {
     console.error("Trap Animator | Dart volley failed", error);
   });
 }
 
-async function playVolley(origin, target, gridSize, wallSpread) {
+async function playVolley(origin, target, { size: gridSize, distance: gridDistance }, wallSpread) {
   const dx = target.x - origin.x;
   const dy = target.y - origin.y;
   const distance = Math.hypot(dx, dy);
@@ -156,22 +156,25 @@ async function playVolley(origin, target, gridSize, wallSpread) {
 
   for (const [index, lane] of [-1, 0, 1].entries()) {
     const component = `dart${index}`;
+    const start = {
+      ...origin,
+      x: origin.x + lane * (wallSpread?.x ?? spreadX),
+      y: origin.y + lane * (wallSpread?.y ?? spreadY)
+    };
+    const end = {
+      ...target,
+      x: target.x + lane * spreadX * 0.35,
+      y: target.y + lane * spreadY * 0.35
+    };
+    const rotation = Math.atan2(end.y - start.y, end.x - start.x);
     components[component] = {
       type: "singleAttack",
       pathType: "linear",
-      path: [{
-        ...origin,
-        x: origin.x + lane * (wallSpread?.x ?? spreadX),
-        y: origin.y + lane * (wallSpread?.y ?? spreadY)
-      }, {
-        ...target,
-        x: target.x + lane * spreadX * 0.35,
-        y: target.y + lane * spreadY * 0.35
-      }],
+      path: [{ ...start, rotation }, { ...end, rotation }],
       projectile: {
         texture: DART_TEXTURE,
         duration,
-        size: { w: gridSize * 0.58, h: gridSize * 0.58 / 3 },
+        size: gridDistance * 0.24,
         animations: [{ function: "followPath", params: {} }]
       }
     };
