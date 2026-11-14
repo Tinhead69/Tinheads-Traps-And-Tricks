@@ -1,6 +1,6 @@
 # Trap Animator
 
-Trap Animator adds a **Dart Wall** action to Monk’s Active Tile Triggers. When a token enters the trigger tile, three darts fly from the wall toward the token’s entry point. In D&D 5e, the action whispers a **DC 15 Dexterity saving throw** to the token’s owners and the GM. The button opens the standard save dialog for the triggering token’s actor. The GM can resolve damage separately.
+Trap Animator adds a **Dart Wall** action to Monk’s Active Tile Triggers. When a token enters the trigger tile, three darts fly from the wall toward the center of the trigger tile. In D&D 5e, the action whispers a **DC 15 Dexterity saving throw** to the token’s owners and the GM. The button opens the standard save dialog for the triggering token’s actor. The GM can resolve damage separately.
 
 ## Install
 

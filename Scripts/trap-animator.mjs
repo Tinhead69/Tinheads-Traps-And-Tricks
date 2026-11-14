@@ -62,7 +62,7 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
   });
 });
 
-async function triggerDartWall({ tile, tokens = [], action, pt, method }) {
+async function triggerDartWall({ tile, tokens = [], action, method }) {
   const scene = tile.parent;
   const gridSize = scene.dimensions.size;
   const settings = action.data ?? {};
@@ -93,8 +93,8 @@ async function triggerDartWall({ tile, tokens = [], action, pt, method }) {
   for (const token of new Set(tokens)) {
     if (token.documentName !== "Token" || token.parent !== scene) continue;
     const center = token.getCenterPoint();
-    const target = method === "enter" && Number.isFinite(pt?.x) && Number.isFinite(pt?.y)
-      ? { x: pt.x, y: pt.y, elevation: center.elevation }
+    const target = method === "enter"
+      ? { x: tile.x + tile.width / 2, y: tile.y + tile.height / 2, elevation: center.elevation }
       : center;
     const effect = { sceneId: scene.id, tokenId: token.id, origin: launch, target, wallSpread };
     game.socket.emit(CHANNEL, effect);
@@ -174,7 +174,7 @@ async function playVolley(origin, target, { size: gridSize, distance: gridDistan
       projectile: {
         texture: DART_TEXTURE,
         duration,
-        size: gridDistance * 0.24,
+        size: gridDistance * 0.276,
         animations: [{ function: "followPath", params: {} }]
       }
     };
