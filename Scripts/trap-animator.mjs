@@ -188,7 +188,10 @@ async function playVolley(origin, target, gridSize, wallSpread) {
 
     // The interface group renders above Foundry's wall, lighting, and fog effects.
     try {
+      // Interface children are sorted by zIndex, including the active token layer.
+      dart.zIndex = Math.max(0, ...layer.children.map(child => child.zIndex || 0)) + 1;
       layer.addChild(dart);
+      layer.sortChildren();
       await CanvasAnimation.animate([
         { parent: dart, attribute: "x", to: endX },
         { parent: dart, attribute: "y", to: endY }
