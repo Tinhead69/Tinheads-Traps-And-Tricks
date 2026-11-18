@@ -60,7 +60,7 @@ export async function openPit(tile) {
   opening.add(tile.uuid);
   try {
     const pit = { texture: foundry.utils.deepClone(tile.texture), openedAt: Date.now() };
-    await tile.update({ texture: { src: BLACK_TEXTURE, scaleX: 1, scaleY: 1, tint: "#ffffff" }, ["flags." + ID + ".pit"]: pit });
+    await tile.update({ texture: { src: BLACK_TEXTURE, fit: "fill", scaleX: 1, scaleY: 1, tint: "#ffffff" }, ["flags." + ID + ".pit"]: pit });
   } finally { opening.delete(tile.uuid); }
 }
 
@@ -69,23 +69,52 @@ Hooks.on("updateTile", (tile, changes) => {
   animateOpening(tile).catch(error => console.error("Trap Animator | Pit opening failed", error));
 });
 
+export function pitOpeningCorners(tile, progress) {
+  const center = tile.shape.center;
+  const halfWidth = Math.abs(tile.width) * Math.max(0, Math.min(1, progress)) / 2;
+  const halfHeight = Math.abs(tile.height) / 2;
+  const angle = tile.rotation * Math.PI / 180;
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  return [[-halfWidth, -halfHeight], [halfWidth, -halfHeight],
+    [halfWidth, halfHeight], [-halfWidth, halfHeight]].map(([x, y]) => ({
+    x: center.x + x * cosine - y * sine,
+    y: center.y + x * sine + y * cosine
+  }));
+}
+
 export async function animateOpening(tile) {
   if (!canvas.ready || canvas.scene.id !== tile.parent.id || !tile.object || animations.has(tile.uuid)) return;
   animations.add(tile.uuid);
   let mesh;
-  let scale;
+  let mask;
+  let previousMask;
   try {
     await tile.object.draw();
     if (!tile.getFlag(ID, "pit")) return;
     mesh = tile.object.mesh;
-    if (!mesh || mesh.destroyed) return;
-    scale = mesh.scale.x;
-    mesh.scale.x = scale * 0.01;
+    if (!mesh || mesh.destroyed || !mesh.parent) return;
+    previousMask = mesh.mask;
+    mask = new PIXI.Graphics();
+    mask.eventMode = "none";
+    mesh.parent.addChild(mask);
+    const state = { progress: 0.01 };
+    const redraw = () => {
+      if (mask.destroyed || mesh.destroyed) return;
+      const points = pitOpeningCorners(tile, state.progress).flatMap(point => {
+        const local = mask.parent.toLocal(canvas.stage.toGlobal(point));
+        return [local.x, local.y];
+      });
+      mask.clear().beginFill(0xffffff).drawPolygon(points).endFill();
+    };
+    redraw();
+    mesh.mask = mask;
     await foundry.canvas.animation.CanvasAnimation.animate([
-      { parent: mesh.scale, attribute: "x", to: scale }
-    ], { duration: 650, easing: time => time });
+      { parent: state, attribute: "progress", to: 1 }
+    ], { duration: 650, easing: time => time, ontick: redraw });
   } finally {
-    if (mesh && !mesh.destroyed && scale !== undefined) mesh.scale.x = scale;
+    if (mesh && !mesh.destroyed && mask && mesh.mask === mask) mesh.mask = previousMask;
+    if (mask && !mask.destroyed) mask.destroy();
     animations.delete(tile.uuid);
   }
 }
