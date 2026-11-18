@@ -62,7 +62,7 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
   });
 });
 
-async function triggerDartWall({ tile, tokens = [], action, stopdata }) {
+async function triggerDartWall({ tile, tokens = [], action, stopdata, method }) {
   const scene = tile.parent;
   const gridSize = scene.dimensions.size;
   const settings = action.data ?? {};
@@ -99,10 +99,13 @@ async function triggerDartWall({ tile, tokens = [], action, stopdata }) {
 
   for (const token of new Set(tokens)) {
     if (!(token instanceof CONFIG.Token.documentClass) || token.parent !== scene) continue;
-    // Monk's destination is the token's final document position, before centering.
-    const destination = stopdata?.document?.id === token.id ? stopdata.dest : null;
-    const hasDestination = Number.isFinite(destination?.x) && Number.isFinite(destination?.y);
-    const target = token.getCenterPoint(hasDestination ? destination : {});
+    const isMovementTrigger = ["enter", "exit", "movement", "stop"].includes(method);
+    const monkDestination = stopdata?.document?.id === token.id ? stopdata.dest : null;
+    const destination = [
+      monkDestination,
+      isMovementTrigger ? token.movement?.destination : null
+    ].find(point => Number.isFinite(point?.x) && Number.isFinite(point?.y));
+    const target = token.getCenterPoint(destination ?? {});
     const effect = { sceneId: scene.id, tokenId: token.id, origin: launch, target, wallSpread };
     game.socket.emit(CHANNEL, effect);
     playOnViewedScene(effect);
