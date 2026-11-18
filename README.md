@@ -1,23 +1,51 @@
 # Trap Animator
 
-Trap Animator adds a **Dart Wall** action to Monk’s Active Tile Triggers. When a token enters the trigger tile, three darts fly from the wall toward the center of the trigger tile. In D&D 5e, the action whispers a **Dexterity saving throw** with a GM-configured DC to the token’s owners and the GM. The button opens the standard save dialog for the triggering token’s actor. The GM can resolve damage separately.
+Animated dart walls and opening pit traps for Foundry VTT v14, D&D 5e, and Monk’s Active Tile Triggers 14.01 or later.
 
-## Install
+## Install or update
 
-1. Use Foundry VTT v14 and Monk’s Active Tile Triggers 14.01 or later.
-2. Extract the ZIP into your Foundry user data directory’s `Data/modules` folder. The manifest should end up at `Data/modules/trap-animator/module.json`.
-3. Restart Foundry if it was running. Launch your world and enable **Trap Animator** and **Monk’s Active Tile Triggers** under **Game Settings → Manage Modules**.
+Use this manifest in Foundry’s Install Module dialog, or update the installed module and reload the world.
 
-## Place a dart wall
+https://raw.githubusercontent.com/Tinhead69/Tinheads-Traps-And-Tricks/main/module.json
 
-1. Place a tile over the area that should trigger the trap. If you want a concealed trigger, use a transparent tile image.
-2. Open the tile settings, enable Monk’s triggers for the tile, and choose **Enter**.
-3. In the tile’s **Actions**, add **Trap Animator → Dart Wall**. Keep **Request Dexterity save** checked and enter the difficulty in **Save DC**. The default is 15. If you already use Monk’s TokenBar to request the save, uncheck this option and put your existing roll request after the Dart Wall action.
-4. In **Launch Wall**, activate the picker and select the wall segment in the scene’s Walls layer. The volley starts at the midpoint and follows the wall if you move it. If you leave the wall unset, enter **Launch X** and **Launch Y** in scene pixels or leave them blank to fire from the midpoint of the tile’s left edge toward its center.
-5. Save the tile. Move a player-owned token across the tile edge. The three darts should appear for clients viewing the scene, and the token’s player and the GM should receive the chat prompt. Click **Roll Dexterity Save** to verify it opens the entering character’s save dialog.
+GitHub generates the download archive from the main branch. Enable Trap Animator and Monk’s Active Tile Triggers in your world. Keep a GM connected while players resolve saves and the GM applies consequences.
 
-The darts render above wall and fog effects for GMs and for players who own or can see the triggering token. The save request uses the D&D 5e system’s native roll dialog, with no additional roll-request module required.
+## Tile setup
 
-## Movement and saving throws
+Place a tile over the trigger area. Set Triggers → Setup to Active, Enter, and Min. Required to Trigger 0. Save with Update Tile. The tile’s Active checkbox also lets the GM disarm and rearm a trap.
 
-With **Request Dexterity save** enabled, entering the trap pauses the token’s active movement until its save card is resolved. A total equal to or higher than **Save DC** resumes the paused movement. A lower total stops that movement. Cancelling the roll dialog keeps the save pending, so the player can reopen it. The GM can delete a pending save card to cancel the movement. Keep a GM connected to resolve player rolls. Movement handling requires Foundry v14 and should be tested with the initiating player and GM both connected.
+## Dart Wall
+
+Add Trap Animator → Dart Wall to the tile’s Actions.
+
+Choose a Launch Wall to fire from its midpoint. You can also enter Launch X and Launch Y in scene pixels. With those fields blank, darts launch from the midpoint of the tile’s left edge. They aim at the triggering token’s movement destination. Tile size and rotation are taken into account.
+
+Enable Request Dexterity save and set Save DC. Enter a Damage on failed save formula such as 1d6 + 2, then choose its damage type. A blank formula deals no damage. Existing traps retain their previous save DC and acquire no damage until the GM configures it.
+
+For poisoned darts, enable Require a follow-up save on failure. Choose the follow-up ability, DC, damage formula/type, and condition. For example, a failed Dexterity save can cause piercing damage followed by a Constitution save against poison damage and the Poisoned condition. Conditions persist until the GM clears them according to the trap’s rules.
+
+## Pit Trap
+
+Use a visible floor tile with opacity 1, sized to cover the pit opening. An image matching the surrounding floor provides a concealed trap before it opens. A transparent tile also works over map artwork.
+
+Add Trap Animator → Pit Trap. Set the Dexterity save DC and the pit depth in feet. A black opening expands across the floor tile when it triggers and persists in the scene. A successful save avoids the configured consequences. The GM handles where the character stands after avoiding the pit.
+
+Default failed-save damage is 1d6 bludgeoning per full 10 feet of depth, capped at 20d6. A 5-foot pit has no default damage, a 20-foot pit deals 2d6, and a 30-foot pit deals 3d6. Use Fall damage override for house rules or special pits, including 0 for no damage. When applied fall damage reduces hit points or temporary hit points, the character is also marked Prone.
+
+This version uses depth to calculate damage. Moving tokens onto lower levels is deferred. It does not invoke the D&D 5e falling indicator or its separate fall-damage card.
+
+To close a pit, create a separate control tile with a click trigger and add Trap Animator → Close / Reset Pit. Select the original pit in Pit tile to reset. Triggering this action restores its original floor texture. Keep this reset action on the separate control tile so the entry action can leave the pit open.
+
+## Saves and consequences
+
+The token’s owners and the GM receive a whispered save card. Roll using its button to use the entering character’s actor, even when another token is selected. A total at or above the configured DC succeeds. Cancelling the roll dialog leaves the card pending.
+
+On a failed save, a GM clicks Apply Consequences. The module rolls the configured damage and passes typed damage to the D&D 5e actor, allowing the system to handle resistances, immunities, vulnerabilities, temporary hit points, and hit points. A configured follow-up save is posted after the first consequences are applied. Its damage and condition are applied by the GM from that second result card if it fails.
+
+Each result card applies once. If application is interrupted by an error, its card is marked for GM review and further automatic application is blocked. Check the damage roll and actor state, then finish any remaining effects manually to avoid applying damage twice. Account for features such as Slow Fall or other special mitigation before applying the result.
+
+Movement pausing from 0.1.14 has been removed. New trap saves do not pause or cancel token movement. Older save cards are migrated to the current card format when the active GM loads the world.
+
+## Validation
+
+Automated regression checks cover action registration, pit opening/reset, depth-based damage, save success/failure/cancellation, typed damage, follow-up saves and conditions, repeat/concurrent application, interrupted application, and dart destination targeting. Rendering and multiplayer behavior require a live Foundry world check.
