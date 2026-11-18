@@ -3,6 +3,8 @@ const CHANNEL = `module.${ID}`;
 const DART_TEXTURE = `modules/${ID}/art/dart.svg`;
 const DEFAULT_SAVE_DC = 15;
 const DART_WIDTH_PIXELS = 96;
+const movementHolds = new Map();
+const resolvingSaves = new Set();
 
 Hooks.once("setupTileActions", (tiles) => {
   tiles.registerTileGroup(ID, "Trap Animator");
@@ -34,7 +36,12 @@ Hooks.once("setupTileActions", (tiles) => {
 });
 
 Hooks.once("ready", () => {
-  game.socket.on(CHANNEL, playOnViewedScene);
+  game.socket.on(CHANNEL, data => {
+    if (data?.type === "pauseMovement") holdMovement(data);
+    else if (data?.type === "cancelHold") finishMovementHold(data, false);
+    else playOnViewedScene(data);
+  });
+  for (const message of game.messages) syncSaveMovement(message);
 });
 
 Hooks.on("renderChatMessageHTML", (message, html) => {
@@ -43,6 +50,11 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
   const button = html.querySelector("[data-trap-animator-save]");
   if (!tokenUuid || !button || game.system.id !== "dnd5e") return;
 
+  if (message.getFlag(ID, "outcome")) {
+    button.disabled = true;
+    button.textContent = message.getFlag(ID, "outcome") === "success" ? "Save succeeded" : "Save failed";
+    return;
+  }
   button.addEventListener("click", async () => {
     button.disabled = true;
     try {
@@ -52,12 +64,14 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
         ui.notifications.warn("You need ownership of the triggering character to roll this save.");
         return;
       }
-      await actor.rollSavingThrow({ ability: "dex", target: dc });
+      await actor.rollSavingThrow({ ability: "dex", target: dc }, {}, {
+        data: { flags: { [ID]: { saveRequest: message.id } } }
+      });
     } catch (error) {
       console.error("Trap Animator | Saving throw failed", error);
       ui.notifications.error("The dart wall saving throw could not be rolled.");
     } finally {
-      button.disabled = false;
+      button.disabled = Boolean(message.getFlag(ID, "outcome"));
     }
   });
 });
@@ -111,7 +125,7 @@ async function triggerDartWall({ tile, tokens = [], action, stopdata, method }) 
     playOnViewedScene(effect);
 
     if (game.system.id === "dnd5e" && (settings.requestSave ?? true)) {
-      await requestDexteritySave(token, getSaveDC(settings.saveDC));
+      await requestDexteritySave(token, getSaveDC(settings.saveDC), isMovementTrigger);
     }
   }
 }
@@ -126,7 +140,7 @@ function getSaveDC(value) {
   return Number.isSafeInteger(dc) && dc > 0 ? dc : DEFAULT_SAVE_DC;
 }
 
-async function requestDexteritySave(token, dc) {
+async function requestDexteritySave(token, dc, isMovementTrigger) {
   const actor = token.actor;
   if (typeof actor?.rollSavingThrow !== "function" || !actor.system.abilities?.dex) return;
   const whisper = game.users
@@ -134,14 +148,37 @@ async function requestDexteritySave(token, dc) {
     .map((user) => user.id);
   if (!whisper.length) return;
 
+  const existing = game.messages.find(message =>
+    message.getFlag(ID, "saveToken") === token.uuid &&
+    message.getFlag(ID, "movementHold") && !message.getFlag(ID, "outcome"));
+  if (existing) return;
+  const movement = token.movement;
+  const movementHold = isMovementTrigger && movement?.id &&
+    ["pending", "paused"].includes(movement.state)
+    ? { tokenUuid: token.uuid, movementId: movement.id,
+      userId: movement.user.id, key: foundry.utils.randomID() }
+    : null;
+  if (movementHold) {
+    holdMovement(movementHold);
+    game.socket.emit(CHANNEL, { type: "pauseMovement", ...movementHold });
+  }
   const ChatMessage = CONFIG.ChatMessage.documentClass;
-  await ChatMessage.create({
+  try {
+    await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ scene: token.parent, token, actor, alias: token.name }),
     content: `<p><strong>Dart Wall</strong> &middot; Make a DC ${dc} Dexterity saving throw.</p>
       <button type="button" data-trap-animator-save>Roll Dexterity Save</button>`,
     whisper,
-    flags: { [ID]: { saveToken: token.uuid, saveDC: dc } }
-  });
+    flags: { [ID]: { saveToken: token.uuid, saveDC: dc, movementHold } }
+    });
+  } catch (error) {
+    // Stop a paused move if its save card could not be created.
+    if (movementHold) {
+      game.socket.emit(CHANNEL, { type: "cancelHold", ...movementHold });
+      finishMovementHold(movementHold, false);
+    }
+    throw error;
+  }
 }
 
 function playOnViewedScene(effect) {
@@ -209,5 +246,79 @@ async function playVolley(origin, target, gridSize, wallSpread) {
     }));
   } finally {
     if (!layer.destroyed) layer.destroy({ children: true });
+  }
+}
+
+function holdMovement(hold) {
+  if (hold.userId !== game.user.id || movementHolds.has(hold.key)) return;
+  const token = fromUuidSync(hold.tokenUuid);
+  if (token?.movement?.id !== hold.movementId) return;
+  const paused = token.pauseMovement(hold.key);
+  if (paused) movementHolds.set(hold.key, hold);
+}
+
+function finishMovementHold(hold, success) {
+  if (!hold || hold.userId !== game.user.id) return;
+  movementHolds.delete(hold.key);
+  const token = fromUuidSync(hold.tokenUuid);
+  if (token?.movement?.id !== hold.movementId) return;
+  if (success) token.resumeMovement(hold.movementId, hold.key);
+  else token.stopMovement();
+}
+
+function syncSaveMovement(message) {
+  const hold = message.getFlag(ID, "movementHold");
+  if (!hold) return;
+  const outcome = message.getFlag(ID, "outcome");
+  if (outcome) finishMovementHold(hold, outcome === "success");
+  else holdMovement(hold);
+}
+
+Hooks.on("preMoveToken", token => {
+  const waitingForSave = game.messages.some(message =>
+    message.getFlag(ID, "saveToken") === token.uuid &&
+    message.getFlag(ID, "movementHold") && !message.getFlag(ID, "outcome"));
+  if (waitingForSave || [...movementHolds.values()].some(hold => hold.tokenUuid === token.uuid)) {
+    ui.notifications.warn("Roll the trap saving throw before moving this character.");
+    return false;
+  }
+});
+
+Hooks.on("createChatMessage", message => {
+  syncSaveMovement(message);
+  resolveTrapSave(message).catch(error => {
+    console.error("Trap Animator | Could not resolve the saving throw", error);
+    ui.notifications.error("Trap Animator could not resolve the saving throw.");
+  });
+});
+
+Hooks.on("updateChatMessage", message => syncSaveMovement(message));
+
+Hooks.on("deleteChatMessage", message => {
+  finishMovementHold(message.getFlag(ID, "movementHold"), false);
+});
+
+async function resolveTrapSave(rollMessage) {
+  const requestId = rollMessage.getFlag(ID, "saveRequest");
+  const request = game.messages.get(requestId);
+  if (!request || request.getFlag(ID, "outcome") || resolvingSaves.has(requestId)) return;
+  const authority = game.users.activeGM ?? request.author;
+  if (authority?.id !== game.user.id) return;
+  resolvingSaves.add(requestId);
+  try {
+    const token = await fromUuid(request.getFlag(ID, "saveToken"));
+    if (!token?.actor || !rollMessage.author ||
+        !token.actor.testUserPermission(rollMessage.author, "OWNER")) return;
+    const roll = rollMessage.rolls?.[0];
+    if (!Number.isFinite(roll?.total) || request.getFlag(ID, "outcome")) return;
+    const dc = getSaveDC(request.getFlag(ID, "saveDC"));
+    const outcome = roll.total >= dc ? "success" : "failure";
+    await request.update({
+      ["flags." + ID + ".outcome"]: outcome,
+      ["flags." + ID + ".saveRoll"]: rollMessage.id
+    });
+    syncSaveMovement(request);
+  } finally {
+    resolvingSaves.delete(requestId);
   }
 }

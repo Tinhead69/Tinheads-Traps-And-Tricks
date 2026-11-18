@@ -17,3 +17,7 @@ Trap Animator adds a **Dart Wall** action to Monk’s Active Tile Triggers. When
 5. Save the tile. Move a player-owned token across the tile edge. The three darts should appear for clients viewing the scene, and the token’s player and the GM should receive the chat prompt. Click **Roll Dexterity Save** to verify it opens the entering character’s save dialog.
 
 The darts render above wall and fog effects for GMs and for players who own or can see the triggering token. The save request uses the D&D 5e system’s native roll dialog, with no additional roll-request module required.
+
+## Movement and saving throws
+
+With **Request Dexterity save** enabled, entering the trap pauses the token’s active movement until its save card is resolved. A total equal to or higher than **Save DC** resumes the paused movement. A lower total stops that movement. Cancelling the roll dialog keeps the save pending, so the player can reopen it. The GM can delete a pending save card to cancel the movement. Keep a GM connected to resolve player rolls. Movement handling requires Foundry v14 and should be tested with the initiating player and GM both connected.
