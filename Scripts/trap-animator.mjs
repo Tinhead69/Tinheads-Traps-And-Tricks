@@ -162,18 +162,25 @@ async function playVolley(origin, target, gridSize, wallSpread) {
   if (!Number.isFinite(distance) || distance < 1) return;
 
   const scene = canvas.scene;
-  const layer = canvas.interface;
+  const stage = canvas.stage;
   const texture = await foundry.canvas.loadTexture(DART_TEXTURE);
   if (!texture?.width) throw new Error("Dart texture could not be loaded.");
+  if (!canvas.ready || canvas.scene !== scene || canvas.stage !== stage) return;
+  const layer = new PIXI.Container();
+  layer.eventMode = "none";
+  layer.zIndex = Number.MAX_SAFE_INTEGER;
+  stage.addChild(layer);
+  stage.sortChildren();
 
   const spreadX = -dy / distance * gridSize * 0.14;
   const spreadY = dx / distance * gridSize * 0.14;
   const duration = Math.min(650, Math.max(180, 110 * distance / gridSize));
   const { CanvasAnimation } = foundry.canvas.animation;
 
-  await Promise.all([-1, 0, 1].map(async (lane, index) => {
+  try {
+    await Promise.all([-1, 0, 1].map(async (lane, index) => {
     if (index) await new Promise(resolve => setTimeout(resolve, index * 70));
-    if (!canvas.ready || canvas.scene !== scene || canvas.interface !== layer || layer.destroyed) return;
+    if (!canvas.ready || canvas.scene !== scene || canvas.stage !== stage || layer.destroyed) return;
 
     const startX = origin.x + lane * (wallSpread?.x ?? spreadX);
     const startY = origin.y + lane * (wallSpread?.y ?? spreadY);
@@ -186,12 +193,9 @@ async function playVolley(origin, target, gridSize, wallSpread) {
     dart.position.set(startX, startY);
     dart.rotation = Math.atan2(endY - startY, endX - startX);
 
-    // The interface group renders above Foundry's wall, lighting, and fog effects.
     try {
-      // Interface children are sorted by zIndex, including the active token layer.
-      dart.zIndex = Math.max(0, ...layer.children.map(child => child.zIndex || 0)) + 1;
+      // This container is a sibling above all scene groups, including tokens.
       layer.addChild(dart);
-      layer.sortChildren();
       await CanvasAnimation.animate([
         { parent: dart, attribute: "x", to: endX },
         { parent: dart, attribute: "y", to: endY }
@@ -199,5 +203,8 @@ async function playVolley(origin, target, gridSize, wallSpread) {
     } finally {
       if (!dart.destroyed) dart.destroy();
     }
-  }));
+    }));
+  } finally {
+    if (!layer.destroyed) layer.destroy({ children: true });
+  }
 }
