@@ -62,7 +62,7 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
   });
 });
 
-async function triggerDartWall({ tile, tokens = [], action, method }) {
+async function triggerDartWall({ tile, tokens = [], action, stopdata }) {
   const scene = tile.parent;
   const gridSize = scene.dimensions.size;
   const settings = action.data ?? {};
@@ -99,10 +99,10 @@ async function triggerDartWall({ tile, tokens = [], action, method }) {
 
   for (const token of new Set(tokens)) {
     if (!(token instanceof CONFIG.Token.documentClass) || token.parent !== scene) continue;
-    const center = token.getCenterPoint();
-    const target = method === "enter"
-      ? { x: tileCenter.x, y: tileCenter.y, elevation: center.elevation }
-      : center;
+    // Monk's destination is the token's final document position, before centering.
+    const destination = stopdata?.document?.id === token.id ? stopdata.dest : null;
+    const hasDestination = Number.isFinite(destination?.x) && Number.isFinite(destination?.y);
+    const target = token.getCenterPoint(hasDestination ? destination : {});
     const effect = { sceneId: scene.id, tokenId: token.id, origin: launch, target, wallSpread };
     game.socket.emit(CHANNEL, effect);
     playOnViewedScene(effect);
